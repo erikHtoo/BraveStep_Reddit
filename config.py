@@ -25,6 +25,7 @@ USER_AGENT = os.getenv(
     "Chrome/120.0.0.0 Safari/537.36",
 )
 PROXY_URL = os.getenv("PROXY_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "20"))
 REQUEST_RETRIES = int(os.getenv("REQUEST_RETRIES", "3"))
 REQUEST_DELAY_SECONDS = float(os.getenv("REQUEST_DELAY_SECONDS", "2"))

@@ -6,6 +6,7 @@ import datetime as dt
 import os
 import re
 import shutil
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -14,6 +15,7 @@ from urllib.parse import urlparse
 import requests
 
 from config import (
+    DATABASE_URL,
     MIRRORS,
     PROXY_URL,
     REQUEST_DELAY_SECONDS,
@@ -21,6 +23,16 @@ from config import (
     REQUEST_TIMEOUT,
     USER_AGENT,
 )
+
+
+def configure_console_output():
+    """Allow the status output's Unicode characters in legacy Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+configure_console_output()
 
 POST_FIELDS = [
     "id", "title", "author", "created_utc", "permalink", "url", "score",
@@ -168,15 +180,19 @@ def media_urls(post):
     url = post.get("url", "")
     if "i.redd.it" in url or url.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
         urls.append((url, "image"))
-    video = post.get("media", {}).get("reddit_video", {}).get("fallback_url")
+    media = post.get("media") or {}
+    video = (media.get("reddit_video") or {}).get("fallback_url")
     if video:
         urls.append((video.split("?")[0], "video"))
-    for image in post.get("preview", {}).get("images", []):
+    preview = post.get("preview") or {}
+    for image in preview.get("images", []):
         source = image.get("source", {}).get("url")
         if source:
             urls.append((source.replace("&amp;", "&"), "image"))
-    for item in post.get("gallery_data", {}).get("items", []):
-        meta = post.get("media_metadata", {}).get(item.get("media_id"), {})
+    gallery_data = post.get("gallery_data") or {}
+    media_metadata = post.get("media_metadata") or {}
+    for item in gallery_data.get("items", []):
+        meta = media_metadata.get(item.get("media_id"), {})
         source = meta.get("s", {}).get("u")
         if source:
             urls.append((source.replace("&amp;", "&"), "image"))
@@ -203,15 +219,21 @@ def download_media(session, post, paths):
     return downloaded
 
 
-def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
+def scrape(target, limit, is_user, include_comments, include_media, proxy_url, database_url):
+    if not database_url:
+        raise ValueError(
+            "DATABASE_URL is required. Add it to .env or pass --database-url. "
+            "See README.md for a free Neon PostgreSQL setup."
+        )
     paths = paths_for(target, is_user)
     seen_posts = read_column(paths["posts"], "permalink")
     seen_comments = read_column(paths["comments"], "comment_id")
     session = build_session(proxy_url)
     endpoint = f"/user/{target}/submitted.json" if is_user else f"/r/{target}/new.json"
     prefix = "u" if is_user else "r"
-    run_id = uuid.uuid4().hex[:8]
+    run_id = str(uuid.uuid4())
     started_at = time.monotonic()
+    database = None
     after = None
     post_count = comment_count = media_count = 0
 
@@ -224,7 +246,14 @@ def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
     print(f"   💬 Scrape comments: {include_comments}")
     print("   🔌 Plugins enabled: False")
     print("-" * 50)
-    print("✅ CSV storage initialized")
+    if database_url:
+        from database import RedditDatabase
+        database = RedditDatabase(database_url)
+        database.initialize()
+        database.start_run(run_id, target, is_user)
+        print("✅ PostgreSQL database initialized")
+    else:
+        print("✅ CSV storage initialized (set DATABASE_URL to enable PostgreSQL)")
     print(f"📋 Job started: {run_id}")
 
     while post_count < limit:
@@ -251,12 +280,18 @@ def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
         if not children:
             break
         rows = []
+        post_pairs = []
         comment_rows = []
         for child in children:
             raw_post = child.get("data", {})
             post = extract_post(raw_post)
             permalink = post.get("permalink")
-            if not permalink or permalink in seen_posts:
+            if not post["id"] or not permalink:
+                continue
+            # Always upsert every valid response, even when the CSV already
+            # contains it from an earlier local scrape.
+            post_pairs.append((post, raw_post))
+            if permalink in seen_posts:
                 continue
             rows.append(post)
             seen_posts.add(permalink)
@@ -284,6 +319,8 @@ def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
                 print(f"   🗄️  SQLite: +{db_posts} posts, +{db_comments} comments")
             except Exception as db_err:
                 print(f"   ⚠️ SQLite save failed (CSV still ok): {db_err}")
+        if database:
+            database.save_posts(post_pairs)
         post_count += len(rows)
         comment_count += len(comment_rows)
         if rows:
@@ -294,12 +331,15 @@ def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
         print(f"   🖼️  Images/Videos: {media_count}")
         print(f"   💬 Comments: {comment_count}")
         after = payload.get("data", {}).get("after")
-        if not after or not rows:
+        if not after:
             break
         print(f"\n⏸️ Cooling down ({REQUEST_DELAY_SECONDS:g}s)...")
         time.sleep(REQUEST_DELAY_SECONDS)
 
     duration = time.monotonic() - started_at
+    if database:
+        database.complete_run(run_id, post_count, comment_count, media_count)
+        database.close()
     print(f"✅ Job {run_id} completed: {post_count} posts, {comment_count} comments in {duration:.1f}s")
     print("\n" + "=" * 50)
     print("✅ SCRAPE COMPLETE!")
@@ -311,17 +351,24 @@ def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Scrape public Reddit posts and comments to CSV.")
+    parser = argparse.ArgumentParser(description="Scrape public Reddit posts into PostgreSQL (with CSV backups).")
     parser.add_argument("target", help="Subreddit or Reddit username to scrape")
     parser.add_argument("--limit", type=int, default=100, help="Maximum number of new posts (default: 100)")
     parser.add_argument("--user", action="store_true", help="Treat target as a Reddit username")
-    parser.add_argument("--no-comments", action="store_true", help="Do not fetch comments")
-    parser.add_argument("--no-media", action="store_true", help="Do not download media")
+    parser.add_argument("--comments", action="store_true", help="Also fetch and save comments to CSV")
+    parser.add_argument("--media", action="store_true", help="Also download media files locally")
     parser.add_argument("--proxy", default=PROXY_URL, help="Optional HTTP(S) proxy URL")
+    parser.add_argument(
+        "--database-url", default=DATABASE_URL,
+        help="PostgreSQL connection URL; overrides DATABASE_URL in .env",
+    )
     args = parser.parse_args()
     if args.limit < 1:
         parser.error("--limit must be at least 1")
-    scrape(args.target, args.limit, args.user, not args.no_comments, not args.no_media, args.proxy)
+    scrape(
+        args.target, args.limit, args.user, args.comments, args.media,
+        args.proxy, args.database_url,
+    )
 
 
 if __name__ == "__main__":

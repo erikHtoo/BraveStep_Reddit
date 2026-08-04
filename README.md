@@ -1,52 +1,59 @@
 # BraveStep Reddit — Listening + Maturity (lab)
 
-Joint lab: **Erik** cleaned scraper (`BraveStep_Ver0.1`) + **my** account maturity half.
+Joint lab: the Reddit listener feeds a local CSV/SQLite corpus and hosted Neon PostgreSQL database; the maturity service is observe/coach only.
 
 | Half | Path | Job |
 |---|---|---|
-| Listening | `main.py` | Scrape → **CSV + SQLite** |
+| Listening | `main.py` | Scrape → CSV + SQLite + Neon PostgreSQL |
 | Maturity | `maturity/` (`:8100`) | OAuth → phases → gates → guardrails → HITL |
 
 ## Hard rules
 
-- Maturity = observe/coach only — **never** auto-post / auto-vote
-- Product listening preference: **SociaVault**; Erik scrape = research corpus / backup
-- Secrets only in `maturity/.env` (gitignored)
+- Maturity never auto-posts or auto-votes.
+- Keep secrets in ignored `.env` files only.
 
-## Quick start
+## Reddit listener
 
-```bash
-# Listening scrape (Erik cleaned CLI)
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python main.py startups --limit 10 --no-media --no-comments
+The default scrape is post-only: title, author, timestamp, subreddit, permalink, content, score, flair, and related metadata. Every valid post is upserted to Neon by its immutable Reddit ID; reruns refresh live fields rather than creating duplicates.
 
-# Maturity API
-python3 -m venv maturity/.venv && source maturity/.venv/bin/activate
-pip install -r maturity/requirements.txt
-cp maturity/.env.example maturity/.env   # add SOCIAVAULT_KEY etc.
-export PYTHONPATH=.
-python -m maturity.cli test
-python -m maturity.cli api               # http://127.0.0.1:8100/docs
+1. Create a Neon PostgreSQL project (PostgreSQL 17 recommended).
+2. Copy `.env.example` to `.env` and set its `DATABASE_URL`.
+3. Install and scrape:
 
-# Visual demo (maturity API up)
-python maturity/demo/serve_visual.py     # http://127.0.0.1:8200/
-```
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   python main.py startups --limit 100
+   ```
 
-## Scrape → maturity join
+Use `--comments` or `--media` only when the optional local comment CSV or media downloads are wanted.
 
-`main.py` writes CSV under `data/r_<sub>/` and also `data/reddit_scraper.db`.  
-If live scrape 403s but CSV exists:
+The scraper also maintains the existing CSV and SQLite listener outputs for maturity workflows. If a live scrape fails but CSV exists:
 
 ```bash
 python import_csv_to_sqlite.py --csv data/r_startups/posts.csv --sub startups
 ```
 
-## Bake-off
+## Scheduled hosting
+
+`.github/workflows/scrape.yml` runs the scraper every six hours using GitHub Actions.
+
+1. Add `DATABASE_URL` as an Actions repository secret; optionally add `PROXY_URL`.
+2. Add `REDDIT_TARGET` as a repository variable. Optionally set `REDDIT_IS_USER=true` and `SCRAPE_LIMIT=100`.
+3. Enable Actions or select **Run workflow** for an immediate run.
+
+Never commit a Neon connection string. The workflow stores the durable hosted post record in PostgreSQL and does not upload local backup data.
+
+## Maturity service
 
 ```bash
+python3 -m venv maturity/.venv && source maturity/.venv/bin/activate
+pip install -r maturity/requirements.txt
+cp maturity/.env.example maturity/.env
 export PYTHONPATH=.
-python -m maturity.demo.bakeoff_erik_vs_sv --subs startups,saas --limit 10
+python -m maturity.cli test
+python -m maturity.cli api
 ```
 
-See `maturity/CONTRACT.md` + `maturity/demo/DEMO.md`.
+See `maturity/CONTRACT.md` and `maturity/demo/DEMO.md`.

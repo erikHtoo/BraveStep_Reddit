@@ -1,0 +1,47 @@
+name: Scheduled Reddit scrape
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Subreddit or username; overrides REDDIT_TARGET"
+        required: false
+      user:
+        description: "Set true when target is a Reddit username"
+        required: false
+        default: "false"
+        type: boolean
+      limit:
+        description: "Maximum new posts to retain in CSV this run"
+        required: false
+        default: "100"
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PROXY_URL: ${{ secrets.PROXY_URL }}
+      REDDIT_TARGET: ${{ inputs.target || vars.REDDIT_TARGET }}
+      REDDIT_IS_USER: ${{ inputs.user || vars.REDDIT_IS_USER || 'false' }}
+      SCRAPE_LIMIT: ${{ inputs.limit || vars.SCRAPE_LIMIT || '100' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run scraper
+        shell: bash
+        run: |
+          test -n "$DATABASE_URL" || { echo "Set DATABASE_URL as a repository secret."; exit 1; }
+          test -n "$REDDIT_TARGET" || { echo "Set REDDIT_TARGET as a repository variable or workflow input."; exit 1; }
+          args=("$REDDIT_TARGET" --limit "$SCRAPE_LIMIT")
+          if [ "$REDDIT_IS_USER" = "true" ]; then args+=(--user); fi
+          python main.py "${args[@]}"

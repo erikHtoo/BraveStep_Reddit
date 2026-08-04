@@ -1,6 +1,6 @@
+.env
 .venv/
 __pycache__/
-.env
 data/
 # Maturity secrets / local
 maturity/.env

@@ -2,3 +2,7 @@
 __pycache__/
 .env
 data/
+# Maturity secrets / local
+maturity/.env
+maturity/.venv/
+maturity/**/__pycache__/

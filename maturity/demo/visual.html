@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Erik and I · live demo</title>
+<style>
+  :root {
+    --bg: #0c0f12;
+    --panel: #141a1f;
+    --ink: #e8eef2;
+    --mut: #8b9aa6;
+    --line: #243039;
+    --erik: #7c6bc4;
+    --sitt: #2f9e6b;
+    --warn: #c4923a;
+    --bad: #c45a5a;
+    --ok: #3d9a6a;
+    --accent: #ff4500;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink);
+    font: 14px/1.5 "IBM Plex Sans", "Segoe UI", sans-serif;
+    background:
+      radial-gradient(900px 420px at 10% -10%, rgba(124,107,196,.18), transparent 55%),
+      radial-gradient(700px 380px at 90% 0%, rgba(47,158,107,.14), transparent 50%),
+      var(--bg);
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    justify-content: space-between; padding: 18px 22px;
+    border-bottom: 1px solid var(--line); background: rgba(12,15,18,.85);
+    backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 5;
+  }
+  h1 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+  h1 span.erik { color: var(--erik); }
+  h1 span.sitt { color: var(--sitt); }
+  .sub { color: var(--mut); font-size: 12px; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line);
+  }
+  .pill.up { color: #d8f5e6; background: #143024; border-color: #2f6f4f; }
+  .pill.down { color: #f5d8d8; background: #2a1414; border-color: #6f2f2f; }
+  .pill.wait { color: #fde9c8; background: #2a2112; border-color: #a05a1c; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 840px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; overflow: hidden;
+  }
+  .card h2 { margin: 0 0 6px; font-size: 15px; }
+  .card p { margin: 0 0 12px; color: var(--mut); font-size: 12.5px; }
+  .owner { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .owner.erik { color: var(--erik); }
+  .owner.sitt { color: var(--sitt); }
+  button.run {
+    appearance: none; border: 1px solid var(--line); background: #1b232a; color: var(--ink);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; width: 100%; text-align: left;
+  }
+  button.run:hover { border-color: #3a4a56; background: #222c35; }
+  button.run:disabled { opacity: .55; cursor: wait; }
+  button.primary {
+    background: linear-gradient(135deg, #2f9e6b, #247a53); border-color: #2f6f4f; color: #fff;
+    text-align: center; margin-top: 8px;
+  }
+  .steps { display: grid; gap: 8px; }
+  .step {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #10161b;
+  }
+  .step .n {
+    width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    font-size: 12px; font-weight: 700; background: #1b232a;
+  }
+  .step.pass .n { background: #143024; color: #9be4bf; }
+  .step.fail .n { background: #2a1414; color: #f0a0a0; }
+  .step .label { font-size: 13px; }
+  .step .meta { color: var(--mut); font-size: 11px; }
+  .badge { font-size: 11px; font-weight: 700; }
+  .badge.pass { color: var(--ok); }
+  .badge.fail { color: var(--bad); }
+  .badge.wait { color: var(--warn); }
+  pre.out {
+    margin: 12px 0 0; padding: 12px; border-radius: 10px; background: #0a0d10;
+    border: 1px solid var(--line); color: #b7c9d4; font: 11.5px/1.45 ui-monospace, Menlo, monospace;
+    max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--mut); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .flow {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
+  }
+  .node {
+    padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: #10161b;
+    font-size: 12px; font-weight: 600;
+  }
+  .node.erik { border-color: #4a3d7a; }
+  .node.sitt { border-color: #2f6f4f; }
+  .node.warn { border-color: #a05a1c; color: #fde9c8; }
+  .arrow { color: var(--mut); font-size: 12px; }
+  .call {
+    border-left: 3px solid var(--accent); background: #1a1410; padding: 10px 12px;
+    border-radius: 0 10px 10px 0; color: var(--mut); font-size: 12.5px;
+  }
+  .call b { color: var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><span class="erik">Erik</span> listening + <span class="sitt">my</span> maturity</h1>
+    <div class="sub">Live localhost demo · Half A (:8000) · Half B (:8100) · this UI (:8200)</div>
+  </div>
+  <div class="pills">
+    <span class="pill wait" id="erikPill">Erik …</span>
+    <span class="pill wait" id="sittPill">Maturity …</span>
+  </div>
+</header>
+
+<main>
+  <div class="call">
+    <b>What you’re looking at:</b> Erik finds Reddit posts (listening). I decide if an account is ready (maturity).
+    Pipeline: scrape writes <b>CSV + SQLite</b> → maturity gates/farmability read the same DB.
+    SociaVault bake-off needs <code>SOCIAVAULT_KEY</code> in <code>maturity/.env</code>.
+  </div>
+
+  <div class="card">
+    <h2>System spine</h2>
+    <p>Same idea as the harness: listening ≠ maturity · HITL only</p>
+    <div class="flow">
+      <div class="node erik">Erik scrape / corpus</div>
+      <span class="arrow">→</span>
+      <div class="node erik">API :8000</div>
+      <span class="arrow">→</span>
+      <div class="node sitt">Gates / farmability</div>
+      <span class="arrow">→</span>
+      <div class="node sitt">Phases + guardrails</div>
+      <span class="arrow">→</span>
+      <div class="node warn">Human submit (HITL)</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="owner erik">Half A · Erik</div>
+      <h2>Listening corpus</h2>
+      <p>Posts already in SQLite (seed + any scrape). Live scrape may write CSV only — gap noted.</p>
+      <div id="erikStats">Loading…</div>
+      <pre class="out" id="erikOut">—</pre>
+    </div>
+    <div class="card">
+      <div class="owner sitt">Half B · me</div>
+      <h2>Maturity health</h2>
+      <p>Observe / coach only. Never auto-post or auto-vote.</p>
+      <div id="sittStats">Loading…</div>
+      <pre class="out" id="sittOut">—</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Run the Friday demo path</h2>
+    <p>Click once — walks Chris’s 5–7 min script against live APIs.</p>
+    <div class="steps" id="steps">
+      <div class="step" data-step="1"><div class="n">1</div><div><div class="label">Health (no_auto_post / no_auto_vote)</div><div class="meta">GET /health</div></div><div class="badge wait">wait</div></div>
+      <div class="step" data-step="2"><div class="n">2</div><div><div class="label">Transition blocked without email</div><div class="meta">POST /v1/transition</div></div><div class="badge wait">wait</div></div>
+      <div class="step" data-step="3"><div class="n">3</div><div><div class="label">Transition advances setup → value</div><div class="meta">verified_email=true</div></div><div class="badge wait">wait</div></div>
+      <div class="step" data-step="4"><div class="n">4</div><div><div class="label">Guardrails block shortener + promo</div><div class="meta">POST /v1/guardrails/check</div></div><div class="badge wait">wait</div></div>
+      <div class="step" data-step="5"><div class="n">5</div><div><div class="label">TFA fails bought aged account</div><div class="meta">POST /v1/tfa/audit</div></div><div class="badge wait">wait</div></div>
+      <div class="step" data-step="6"><div class="n">6</div><div><div class="label">Gates from Erik corpus (join)</div><div class="meta">POST /v1/gates/infer source=erik</div></div><div class="badge wait">wait</div></div>
+      <div class="step" data-step="7"><div class="n">7</div><div><div class="label">Farmability + karma-farm blocklist</div><div class="meta">GET /v1/farmability/…</div></div><div class="badge wait">wait</div></div>
+    </div>
+    <button class="run primary" id="runAll" type="button">Run full demo</button>
+    <pre class="out" id="demoOut">Press “Run full demo”…</pre>
+  </div>
+
+  <div class="card">
+    <h2>Integrate into Bravestep?</h2>
+    <table>
+      <tr><th>Piece</th><th>Now</th></tr>
+      <tr><td>Maturity domain (phases / guardrails / TFA)</td><td>Port into <code>feat/reddit-channel</code></td></tr>
+      <tr><td>Erik scrape as 100% product listening</td><td>Bake-off pending (needs SociaVault key)</td></tr>
+      <tr><td>Scrape → SQLite → maturity</td><td>Wired — re-scrape then Run full demo</td></tr>
+    </table>
+  </div>
+</main>
+
+<script>
+  const erikBase = '/proxy/erik';
+  const sittBase = '/proxy/maturity';
+
+  const $ = (id) => document.getElementById(id);
+  const pill = (id, ok, label) => {
+    const el = $(id);
+    el.className = 'pill ' + (ok ? 'up' : 'down');
+    el.textContent = label;
+  };
+
+  async function jget(url) {
+    const r = await fetch(url);
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+    if (!r.ok) throw new Error((data && data.detail) || text || r.status);
+    return data;
+  }
+  async function jpost(url, body) {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+    return data;
+  }
+
+  function setStep(n, pass, detail) {
+    const el = document.querySelector(`.step[data-step="${n}"]`);
+    el.classList.remove('pass', 'fail');
+    el.classList.add(pass ? 'pass' : 'fail');
+    const badge = el.querySelector('.badge');
+    badge.className = 'badge ' + (pass ? 'pass' : 'fail');
+    badge.textContent = pass ? 'pass' : 'fail';
+    if (detail) el.querySelector('.meta').textContent = detail;
+  }
+
+  async function refreshPanels() {
+    try {
+      const posts = await jget(erikBase + '/posts?limit=5');
+      const subs = await jget(erikBase + '/subreddits');
+      pill('erikPill', true, 'Erik :8000 up');
+      const list = Array.isArray(posts) ? posts : (posts.posts || []);
+      $('erikStats').innerHTML = `
+        <table>
+          <tr><th>Subreddits</th><td>${(subs || []).length}</td></tr>
+          <tr><th>Sample posts</th><td>${list.length}</td></tr>
+        </table>`;
+      $('erikOut').textContent = JSON.stringify({ subreddits: subs, sample: list.slice(0, 3) }, null, 2);
+    } catch (e) {
+      pill('erikPill', false, 'Erik down');
+      $('erikStats').textContent = String(e.message || e);
+      $('erikOut').textContent = String(e);
+    }
+
+    try {
+      const health = await jget(sittBase + '/health');
+      pill('sittPill', true, 'Maturity :8100 up');
+      $('sittStats').innerHTML = `
+        <table>
+          <tr><th>Service</th><td>${health.service}</td></tr>
+          <tr><th>Rules</th><td>${(health.rules || []).join(' · ')}</td></tr>
+        </table>`;
+      $('sittOut').textContent = JSON.stringify(health, null, 2);
+    } catch (e) {
+      pill('sittPill', false, 'Maturity down');
+      $('sittStats').textContent = String(e.message || e);
+      $('sittOut').textContent = String(e);
+    }
+  }
+
+  async function runDemo() {
+    const btn = $('runAll');
+    btn.disabled = true;
+    const log = [];
+    const say = (m) => { log.push(m); $('demoOut').textContent = log.join('\n\n'); };
+
+    try {
+      say('1) Health…');
+      const health = await jget(sittBase + '/health');
+      const ok1 = health.ok && (health.rules || []).includes('no_auto_post');
+      setStep(1, ok1, (health.rules || []).join(', '));
+      say('1) ' + JSON.stringify(health));
+
+      say('2) Transition without email…');
+      const blocked = await jpost(sittBase + '/v1/transition', {
+        phase: 'setup', verified_email: false,
+        target_subs: ['saas', 'startups'], joined_subs: ['saas', 'startups'],
+      });
+      const ok2 = blocked.advanced === false && (blocked.blocked_by || []).includes('verified_email');
+      setStep(2, ok2, (blocked.blockers_plain || []).join(' '));
+      say('2) ' + JSON.stringify(blocked, null, 2));
+
+      say('3) Transition with email…');
+      const advanced = await jpost(sittBase + '/v1/transition', {
+        phase: 'setup', verified_email: true,
+        target_subs: ['saas', 'startups'], joined_subs: ['saas', 'startups'],
+      });
+      const ok3 = advanced.advanced === true && advanced.next === 'value';
+      setStep(3, ok3, `next=${advanced.next}`);
+      say('3) ' + JSON.stringify(advanced, null, 2));
+
+      say('4) Guardrails…');
+      const gr = await jpost(sittBase + '/v1/guardrails/check', {
+        text: 'check this https://bit.ly/abc',
+        canonical_link: 'https://bit.ly/abc',
+        is_promo: true,
+      });
+      const ok4 = gr.block === true && (gr.violations || []).includes('shortener');
+      setStep(4, ok4, (gr.violations || []).join(', '));
+      say('4) ' + JSON.stringify(gr, null, 2));
+
+      say('5) TFA…');
+      const tfa = await jpost(sittBase + '/v1/tfa/audit', {
+        account_age_days: 400, bought_aged_account: true, product_mention: true,
+      });
+      const ok5 = tfa.ok === false;
+      setStep(5, ok5, (tfa.findings || []).map(f => f.code).join(', '));
+      say('5) ' + JSON.stringify(tfa, null, 2));
+
+      say('6) Gates from Erik…');
+      const gates = await jpost(sittBase + '/v1/gates/infer', {
+        subreddits: ['saas', 'startups'], source: 'erik',
+      });
+      const ok6 = Array.isArray(gates.estimates) && gates.estimates.length > 0;
+      setStep(6, ok6, gates.estimates.map(e => `${e.subreddit}:P5≈${e.karma_gate}`).join(' · '));
+      say('6) ' + JSON.stringify(gates, null, 2));
+
+      say('7) Farmability…');
+      const farm = await jget(sittBase + '/v1/farmability/saas');
+      const blockedFarm = await jget(sittBase + '/v1/farmability/FreeKarma4You');
+      const ok7 = farm.avoid === false && blockedFarm.avoid === true;
+      setStep(7, ok7, `saas=${farm.score} · farm_block=${blockedFarm.avoid}`);
+      say('7) ' + JSON.stringify({ farm, blockedFarm }, null, 2));
+
+      say('Done. Lab join works. Not full Bravestep product path yet (CSV≠SQLite + SV bake-off still owed).');
+    } catch (e) {
+      say('ERROR: ' + (e.message || e));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $('runAll').addEventListener('click', runDemo);
+  refreshPanels();
+  setInterval(refreshPanels, 8000);
+</script>
+</body>
+</html>

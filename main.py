@@ -273,6 +273,17 @@ def scrape(target, limit, is_user, include_comments, include_media, proxy_url):
 
         append_rows(paths["posts"], POST_FIELDS, rows)
         append_rows(paths["comments"], COMMENT_FIELDS, comment_rows)
+        # Also write SQLite so maturity gates can read the same corpus
+        if rows and not is_user:
+            try:
+                from sqlite_store import save_comments, save_posts
+
+                db_posts = save_posts(rows, target)
+                by_permalink = {p.get("permalink") or "": p.get("id") or "" for p in rows}
+                db_comments = save_comments(comment_rows, by_permalink) if comment_rows else 0
+                print(f"   🗄️  SQLite: +{db_posts} posts, +{db_comments} comments")
+            except Exception as db_err:
+                print(f"   ⚠️ SQLite save failed (CSV still ok): {db_err}")
         post_count += len(rows)
         comment_count += len(comment_rows)
         if rows:

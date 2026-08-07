@@ -37,11 +37,20 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: Run scraper
+      - name: Check scrape configuration
+        id: scrape_config
         shell: bash
         run: |
-          test -n "$DATABASE_URL" || { echo "Set DATABASE_URL as a repository secret."; exit 1; }
-          test -n "$REDDIT_TARGET" || { echo "Set REDDIT_TARGET as a repository variable or workflow input."; exit 1; }
+          if [ -z "$DATABASE_URL" ] || [ -z "$REDDIT_TARGET" ]; then
+            echo "::warning::Skipping scrape because DATABASE_URL or REDDIT_TARGET is not configured."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run scraper
+        if: steps.scrape_config.outputs.enabled == 'true'
+        shell: bash
+        run: |
           args=("$REDDIT_TARGET" --limit "$SCRAPE_LIMIT")
           if [ "$REDDIT_IS_USER" = "true" ]; then args+=(--user); fi
           python main.py "${args[@]}"
